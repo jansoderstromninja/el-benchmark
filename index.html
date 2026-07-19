@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El-benchmark: Pris vs Prognos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        canvas {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Spotpris vs AI-prognos</h1>
+        <p style="text-align: center;">Jämförelse mellan verkligt pris och Sähkövatkains prognos (cent/kWh).</p>
+        
+        <canvas id="elChart"></canvas>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+            authDomain: "el-benchmark.firebaseapp.com",
+            projectId: "el-benchmark",
+            storageBucket: "el-benchmark.firebasestorage.app",
+            messagingSenderId: "775311101952",
+            appId: "1:775311101952:web:904f9fad422692df6e88e5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Custom plugin för att rita "Nu"-linjen
+        const currentTimePlugin = {
+            id: 'currentTimeLine',
+            afterDraw: (chart) => {
+                const ctx = chart.ctx;
+                const xAxis = chart.scales.x;
+                const yAxis = chart.scales.y;
+
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hour = String(now.getHours()).padStart(2, '0');
+                const currentHourLabel = `${year}-${month}-${day} ${hour}:00`;
+
+                const index = chart.data.labels.findIndex(label => label === currentHourLabel);
+
+                if (index !== -1) {
+                    const x = xAxis.getPixelForValue(index);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.8)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    
+                    ctx.fillStyle = 'rgba(46, 204, 113, 1)';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText('Nu', x, yAxis.top - 8);
+                    ctx.restore();
+                }
+            }
+        };
+
+        async function renderChart() {
+            try {
+                const q = query(collection(db, "electricity_points"), orderBy("__name__"));
+                const querySnapshot = await getDocs(q);
+                
+                const labels = [];
+                const actualPrices = [];
+                const predictedPrices = [];
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const rawDate = doc.id.split("_");
+                    labels.push(rawDate[0] + " " + rawDate[1]); 
+
+                    actualPrices.push(data.actual_price !== undefined ? data.actual_price : null);
+                    predictedPrices.push(data.predicted_vatkain !== undefined ? data.predicted_vatkain : null);
+                });
+
+                const ctx = document.getElementById('elChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Faktiskt spotpris',
+                                data: actualPrices,
+                                borderColor: '#3498db',
+                                backgroundColor: '#3498db',
+                                tension: 0.2,
+                                spanGaps: true
+                            },
+                            {
+                                label: 'Prognos (Sähkövatkain)',
+                                data: predictedPrices,
+                                borderColor: '#e74c3c',
+                                backgroundColor: '#e74c3c',
+                                borderDash: [5, 5],
+                                tension: 0.2,
+                                spanGaps: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        layout: {
+                            padding: { top: 20 }
+                        },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            y: {
+                                title: { display: true, text: 'Pris (cent)' }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    // Custom tooltip-etikett
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y + ' cent';
+                                        }
+
+                                        // Räkna ut procentuell skillnad om vi hovrar över prognosen och båda priserna finns
+                                        if (context.datasetIndex === 1) {
+                                            const dataIndex = context.dataIndex;
+                                            const actual = context.chart.data.datasets[0].data[dataIndex];
+                                            const predicted = context.chart.data.datasets[1].data[dataIndex];
+
+                                            if (actual !== null && predicted !== null) {
+                                                const diff = predicted - actual;
+                                                const sign = diff > 0 ? '+' : '';
+                                                
+                                                // Undvik att dela på 0 om spotpriset skulle vara exakt 0,00
+                                                if (actual !== 0) {
+                                                    const percent = ((diff / Math.abs(actual)) * 100).toFixed(1);
+                                                    label += ` (Felmarginal: ${sign}${percent}%)`;
+                                                } else {
+                                                    label += ` (Felmarginal: ${sign}${diff.toFixed(2)} cent)`;
+                                                }
+                                            }
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [currentTimePlugin] 
+                });
+            } catch (error) {
+                console.error("Det gick inte att hämta datan.", error);
+            }
+        }
+
+        renderChart();
+    </script>
+</body>
+</html>
