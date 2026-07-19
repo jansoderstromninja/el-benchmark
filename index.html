@@ -6,8 +6,22 @@
     <title>El-benchmark</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { margin: 0; padding: 10px; background-color: #f9f9f9; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 900px; height: 80vh; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        body { 
+            margin: 0; 
+            padding: 10px; 
+            background-color: #f9f9f9; 
+            display: flex; 
+            justify-content: center; 
+        }
+        .container { 
+            width: 100%; 
+            max-width: 900px; 
+            height: 80vh; 
+            background: white; 
+            padding: 15px; 
+            border-radius: 12px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+        }
     </style>
 </head>
 <body>
@@ -30,6 +44,33 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+
+        const currentTimePlugin = {
+            id: 'currentTimeLine',
+            afterDraw: (chart) => {
+                const { ctx, scales: { x, y } } = chart;
+                const now = new Date();
+                const currentHourLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:00`;
+                const index = chart.data.labels.findIndex(label => label === currentHourLabel);
+
+                if (index !== -1) {
+                    const xPos = x.getPixelForValue(index);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, y.top);
+                    ctx.lineTo(xPos, y.bottom);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.8)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(46, 204, 113, 1)';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText('Nu', xPos, y.top - 5);
+                    ctx.restore();
+                }
+            }
+        };
 
         async function renderChart() {
             const q = query(collection(db, "electricity_points"), orderBy("__name__"));
@@ -56,8 +97,26 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'nearest', intersect: false },
-                    scales: { x: { ticks: { maxRotation: 45, maxTicksLimit: 6 } } }
-                }
+                    scales: { x: { ticks: { maxRotation: 45, maxTicksLimit: 6 } } },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label + ': ' + (context.parsed.y ?? 'N/A') + ' cent';
+                                    if (context.datasetIndex === 1) {
+                                        const actual = context.chart.data.datasets[0].data[context.dataIndex];
+                                        if (actual !== null && context.parsed.y !== null && actual !== 0) {
+                                            const diff = context.parsed.y - actual;
+                                            label += ` (Fel: ${((diff / Math.abs(actual)) * 100).toFixed(1)}%)`;
+                                        }
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [currentTimePlugin]
             });
         }
         renderChart();
