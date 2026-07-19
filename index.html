@@ -6,8 +6,8 @@
     <title>El-benchmark</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 10px; margin: 0; background-color: #f9f9f9; }
-        .container { background-color: white; padding: 15px; border-radius: 12px; height: 400px; }
+        body { margin: 0; padding: 10px; background-color: #f9f9f9; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 900px; height: 80vh; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
@@ -19,31 +19,44 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
         import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-        // ... (din firebaseConfig här) ...
+        const firebaseConfig = {
+            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+            authDomain: "el-benchmark.firebaseapp.com",
+            projectId: "el-benchmark",
+            storageBucket: "el-benchmark.firebasestorage.app",
+            messagingSenderId: "775311101952",
+            appId: "1:775311101952:web:904f9fad422692df6e88e5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
         async function renderChart() {
-            // ... (din data-hämtning här) ...
+            const q = query(collection(db, "electricity_points"), orderBy("__name__"));
+            const querySnapshot = await getDocs(q);
+            
+            const labels = [], actualPrices = [], predictedPrices = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                labels.push(doc.id.split("_")[0] + " " + doc.id.split("_")[1]); 
+                actualPrices.push(data.actual_price ?? null);
+                predictedPrices.push(data.predicted_vatkain ?? null);
+            });
 
             new Chart(document.getElementById('elChart').getContext('2d'), {
                 type: 'line',
-                data: { /* ... data ... */ },
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Faktiskt', data: actualPrices, borderColor: '#3498db', tension: 0.2, spanGaps: true },
+                        { label: 'Prognos', data: predictedPrices, borderColor: '#e74c3c', borderDash: [5, 5], tension: 0.2, spanGaps: true }
+                    ]
+                },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false, // Gör grafen följsam
-                    interaction: {
-                        mode: 'nearest', // Bättre för touch
-                        intersect: false,
-                    },
-                    scales: {
-                        x: {
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
-                                autoSkip: true,
-                                maxTicksLimit: 6 // Begränsar antalet datumetiketter
-                            }
-                        }
-                    }
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false },
+                    scales: { x: { ticks: { maxRotation: 45, maxTicksLimit: 6 } } }
                 }
             });
         }
