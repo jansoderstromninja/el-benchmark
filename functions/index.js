@@ -32,7 +32,7 @@ exports.fetchElectricityData = onSchedule({
       batch.set(docRef, {
         timestamp: new Date(item.startDate),
         actual_price: item.price
-      }, { merge: true }); // merge: true gör att vi inte skriver över gissningen om den redan finns
+      }, { merge: true });
     });
 
     // 2. HÄMTA PROGNOSEN (Sähkovatkain / Nordpool Predict)
@@ -40,15 +40,22 @@ exports.fetchElectricityData = onSchedule({
     
     if (predictResponse.ok) {
       const predictData = await predictResponse.json();
+      console.log("Prognosdata mottagen:", predictData[0]); 
       
       predictData.forEach((item) => {
-        const docId = createDocId(item.timestamp);
-        const docRef = db.collection("electricity_points").doc(docId);
+        // Vi söker efter både gamla och nya nyckelnamn för att vara säkra
+        const timestamp = item.timestamp || item.date;
+        const price = item.price_prediction || item.prediction;
         
-        batch.set(docRef, {
-          timestamp: new Date(item.timestamp),
-          predicted_vatkain: item.price_prediction
-        }, { merge: true });
+        if (timestamp) {
+          const docId = createDocId(timestamp);
+          const docRef = db.collection("electricity_points").doc(docId);
+          
+          batch.set(docRef, {
+            timestamp: new Date(timestamp),
+            predicted_vatkain: price
+          }, { merge: true });
+        }
       });
     }
 
