@@ -1,15 +1,72 @@
-async function renderChart() {
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El-benchmark</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { margin: 0; padding: 10px; background-color: #f9f9f9; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 900px; height: 80vh; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <canvas id="elChart"></canvas>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+            authDomain: "el-benchmark.firebaseapp.com",
+            projectId: "el-benchmark",
+            storageBucket: "el-benchmark.firebasestorage.app",
+            messagingSenderId: "775311101952",
+            appId: "1:775311101952:web:904f9fad422692df6e88e5"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const currentTimePlugin = {
+            id: 'currentTimeLine',
+            afterDraw: (chart) => {
+                const { ctx, scales: { x, y } } = chart;
+                const now = new Date();
+                const currentHourLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:00`;
+                const index = chart.data.labels.findIndex(label => label === currentHourLabel);
+
+                if (index !== -1) {
+                    const xPos = x.getPixelForValue(index);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, y.top);
+                    ctx.lineTo(xPos, y.bottom);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.8)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(46, 204, 113, 1)';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText('Nu', xPos, y.top - 5);
+                    ctx.restore();
+                }
+            }
+        };
+
+        async function renderChart() {
             const q = query(collection(db, "electricity_points"), orderBy("__name__"));
             const querySnapshot = await getDocs(q);
             
             const labels = [], actualPrices = [], predictedPrices = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                // Dela upp id för att få datum och timme
-                const parts = doc.id.split("_"); 
-                labels.push(parts[0] + " " + parts[1]); 
-                
-                // Vi sparar värdena explicit, även om de är null
+                const parts = doc.id.split("_");
+                labels.push(parts[0] + " " + parts[1]);
                 actualPrices.push(data.actual_price !== undefined ? data.actual_price : null);
                 predictedPrices.push(data.predicted_vatkain !== undefined ? data.predicted_vatkain : null);
             });
@@ -19,21 +76,30 @@ async function renderChart() {
                 data: {
                     labels: labels,
                     datasets: [
-                        { 
-                            label: 'Faktiskt', 
-                            data: actualPrices, 
-                            borderColor: '#3498db', 
-                            tension: 0.2, 
-                            spanGaps: true // Gör att linjen fortsätter även om data saknas
-                        },
-                        { 
-                            label: 'Prognos', 
-                            data: predictedPrices, 
-                            borderColor: '#e74c3c', 
-                            borderDash: [5, 5], 
-                            tension: 0.2, 
-                            spanGaps: true // Gör att linjen fortsätter även om data saknas
-                        }
+                        { label: 'Faktiskt', data: actualPrices, borderColor: '#3498db', tension: 0.2, spanGaps: true },
+                        { label: 'Prognos', data: predictedPrices, borderColor: '#e74c3c', borderDash: [5, 5], tension: 0.2, spanGaps: true }
                     ]
                 },
-                // ... (resten av konfigurationen som innan)
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false },
+                    scales: { x: { ticks: { maxRotation: 45, maxTicksLimit: 6 } } },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label + ': ' + (context.parsed.y ?? 'N/A') + ' cent';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [currentTimePlugin]
+            });
+        }
+        renderChart();
+    </script>
+</body>
+</html>
