@@ -62,13 +62,15 @@
             const q = query(collection(db, "electricity_points"), orderBy("__name__"));
             const querySnapshot = await getDocs(q);
             
-            const labels = [], actualPrices = [], predictedPrices = [];
+            const labels = [], actualPrices = [], windPredictions = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
                 const parts = doc.id.split("_");
                 labels.push(parts[0] + " " + parts[1]);
+                
                 actualPrices.push(data.actual_price !== undefined ? data.actual_price : null);
-                predictedPrices.push(data.predicted_vatkain !== undefined ? data.predicted_vatkain : null);
+                // Ändrat från vatkain till vår nya wind_mw data
+                windPredictions.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
             });
 
             new Chart(document.getElementById('elChart').getContext('2d'), {
@@ -76,21 +78,65 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        { label: 'Faktiskt', data: actualPrices, borderColor: '#3498db', tension: 0.2, spanGaps: true },
-                        { label: 'Prognos', data: predictedPrices, borderColor: '#e74c3c', borderDash: [5, 5], tension: 0.2, spanGaps: true }
+                        { 
+                            label: 'Elpris (c/kWh)', 
+                            data: actualPrices, 
+                            borderColor: '#3498db', 
+                            tension: 0.2, 
+                            spanGaps: true,
+                            yAxisID: 'y' // Kopplar priset till vänstra axeln
+                        },
+                        { 
+                            label: 'Vindprognos (MW)', 
+                            data: windPredictions, 
+                            borderColor: '#2ecc71', // Snygg grön färg
+                            borderDash: [5, 5], 
+                            tension: 0.2, 
+                            spanGaps: true,
+                            yAxisID: 'y1' // Kopplar vinden till högra axeln
+                        }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'nearest', intersect: false },
-                    scales: { x: { ticks: { maxRotation: 45, maxTicksLimit: 6 } } },
+                    scales: { 
+                        x: { 
+                            ticks: { maxRotation: 45, maxTicksLimit: 6 } 
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Pris (c/kWh)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Vindkraft (MW)'
+                            },
+                            grid: {
+                                drawOnChartArea: false // Hindrar rutnätet från att bli rörigt
+                            }
+                        }
+                    },
                     plugins: {
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    let label = context.dataset.label + ': ' + (context.parsed.y ?? 'N/A') + ' cent';
-                                    return label;
+                                    let value = context.parsed.y ?? 'N/A';
+                                    if (context.datasetIndex === 0) {
+                                        return context.dataset.label + ': ' + value + ' cent';
+                                    } else {
+                                        return context.dataset.label + ': ' + value + ' MW';
+                                    }
                                 }
                             }
                         }
