@@ -25,7 +25,7 @@
         // KLISTRA IN DIN EGEN CONFIG HÄR!
         // ==========================================
         const firebaseConfig = {
-  apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
   authDomain: "el-benchmark.firebaseapp.com",
   projectId: "el-benchmark",
   storageBucket: "el-benchmark.firebasestorage.app",
@@ -102,7 +102,6 @@
                 consumptionData.push(data.predicted_consumption_mw !== undefined ? data.predicted_consumption_mw : null);
                 windData.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
                 
-                // Nya variablerna
                 solarData.push(data.predicted_solar_mw !== undefined ? data.predicted_solar_mw : null);
                 nuclearData.push(data.actual_nuclear_mw !== undefined ? data.actual_nuclear_mw : null);
                 hydroData.push(data.actual_hydro_mw !== undefined ? data.actual_hydro_mw : null);
@@ -123,7 +122,8 @@
                             backgroundColor: 'rgba(54, 162, 235, 0.1)',
                             yAxisID: 'y',
                             tension: 0.4,
-                            fill: true,
+                            fill: false,        // Ändrat till false för att undvika fyllnadsdropp mot 0
+                            spanGaps: false,    // Tvingar linjen att brytas vid saknad data
                             order: 1
                         },
                         {
@@ -133,6 +133,7 @@
                             borderDash: [5, 5],
                             yAxisID: 'y1', 
                             tension: 0.4,
+                            spanGaps: false,
                             order: 2
                         },
                         {
@@ -141,43 +142,48 @@
                             borderColor: 'rgba(75, 192, 192, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
+                            spanGaps: false,
                             order: 3
                         },
                         {
                             label: 'Solprognos (MW)',
                             data: solarData,
-                            borderColor: 'rgba(255, 206, 86, 1)', // Gul
+                            borderColor: 'rgba(255, 206, 86, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, // Dold som standard
+                            hidden: true, 
+                            spanGaps: false,
                             order: 4
                         },
                         {
                             label: 'Kärnkraft (MW)',
                             data: nuclearData,
-                            borderColor: 'rgba(153, 102, 255, 1)', // Lila
+                            borderColor: 'rgba(153, 102, 255, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, // Dold som standard
+                            hidden: true, 
+                            spanGaps: false,
                             order: 5
                         },
                         {
                             label: 'Vattenkraft (MW)',
                             data: hydroData,
-                            borderColor: 'rgba(54, 162, 235, 1)', // Blå
+                            borderColor: 'rgba(54, 162, 235, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, // Dold som standard
+                            hidden: true, 
+                            spanGaps: false,
                             order: 6
                         },
                         {
                             label: 'Nettoimport (MW)',
                             data: importData,
-                            borderColor: 'rgba(201, 203, 207, 1)', // Grå
+                            borderColor: 'rgba(201, 203, 207, 1)', 
                             borderDash: [2, 2],
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, // Dold som standard
+                            hidden: true, 
+                            spanGaps: false,
                             order: 7
                         }
                     ]
