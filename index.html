@@ -21,21 +21,45 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // ==========================================
-        // VIKTIGT: KLISTRA IN DIN EGEN CONFIG HÄR!
-        // ==========================================
         const firebaseConfig = {
-    apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
-    authDomain: "el-benchmark.firebaseapp.com",
-  projectId: "el-benchmark",
-  storageBucket: "el-benchmark.firebasestorage.app",
-  messagingSenderId: "775311101952",
-  appId: "1:775311101952:web:904f9fad422692df6e88e5"
+            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+            authDomain: "el-benchmark.firebaseapp.com",
+            projectId: "el-benchmark",
+            storageBucket: "el-benchmark.firebasestorage.app",
+            messagingSenderId: "775311101952",
+            appId: "1:775311101952:web:904f9fad422692df6e88e5"
         };
-        // ==========================================
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+
+        const nowLinePlugin = {
+            id: 'nowLinePlugin',
+            afterDraw: (chart) => {
+                const index = chart.config.options.plugins?.nowLinePlugin?.index;
+                if (index === undefined) return;
+
+                const x = chart.scales.x.getPixelForValue(index);
+                const yTop = chart.scales.y.top;
+                const yBottom = chart.scales.y.bottom;
+
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, yTop);
+                ctx.lineTo(x, yBottom);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#2ecc71';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+
+                ctx.fillStyle = '#2ecc71';
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText('Nu', x, yTop - 5);
+                ctx.restore();
+            }
+        };
 
         async function renderChart() {
             const labels = [];
@@ -43,19 +67,25 @@
             const windData = [];
             const consumptionData = [];
 
+            let nowIndex = 0; 
+            const currentTime = new Date().getTime();
+
             const q = query(collection(db, "electricity_points"), orderBy("timestamp", "asc"));
             const querySnapshot = await getDocs(q);
 
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
                 
-                // Formaterar X-axeln snyggare, t.ex. "21 jul 15:00"
                 if (data.timestamp) {
                     const dateObj = data.timestamp.toDate();
                     const formattedDate = dateObj.toLocaleString('sv-FI', { 
                         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
                     });
                     labels.push(formattedDate);
+
+                    if (dateObj.getTime() <= currentTime) {
+                        nowIndex = labels.length - 1;
+                    }
                 } else {
                     labels.push(doc.id);
                 }
@@ -68,6 +98,7 @@
             const ctx = document.getElementById('myChart').getContext('2d');
             new Chart(ctx, {
                 type: 'line',
+                plugins: [nowLinePlugin],
                 data: {
                     labels: labels,
                     datasets: [
@@ -99,6 +130,11 @@
                     ]
                 },
                 options: {
+                    plugins: {
+                        nowLinePlugin: {
+                            index: nowIndex
+                        }
+                    },
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: {
