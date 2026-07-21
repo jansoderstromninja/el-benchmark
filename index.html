@@ -21,13 +21,18 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // VÄNLIGEN KLISTRA IN DIN FIREBASE CONFIG HÄR:
+        // ==========================================
+        // VIKTIGT: KLISTRA IN DIN EGEN CONFIG HÄR!
+        // ==========================================
         const firebaseConfig = {
-            // apiKey: "...",
-            // authDomain: "...",
-            // projectId: "...",
-            // osv...
+    apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+    authDomain: "el-benchmark.firebaseapp.com",
+  projectId: "el-benchmark",
+  storageBucket: "el-benchmark.firebasestorage.app",
+  messagingSenderId: "775311101952",
+  appId: "1:775311101952:web:904f9fad422692df6e88e5"
         };
+        // ==========================================
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
