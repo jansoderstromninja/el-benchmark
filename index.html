@@ -72,6 +72,7 @@
             const windData = [];
             const solarData = [];
             const nuclearData = [];
+            const nuclearForecastData = [];
             const hydroData = [];
             const importData = [];
 
@@ -98,14 +99,15 @@
                     labels.push(doc.id);
                 }
 
-                priceData.push(data.actual_price !== undefined ? data.actual_price : null);
-                consumptionData.push(data.predicted_consumption_mw !== undefined ? data.predicted_consumption_mw : null);
-                windData.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
-                
-                solarData.push(data.predicted_solar_mw !== undefined ? data.predicted_solar_mw : null);
-                nuclearData.push(data.actual_nuclear_mw !== undefined ? data.actual_nuclear_mw : null);
-                hydroData.push(data.actual_hydro_mw !== undefined ? data.actual_hydro_mw : null);
-                importData.push(data.actual_import_mw !== undefined ? data.actual_import_mw : null);
+                // Genom att tvinga fram NaN (Not a Number) istället för null klipper Chart.js linjerna direkt.
+                priceData.push(typeof data.actual_price === 'number' ? data.actual_price : NaN);
+                consumptionData.push(typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : NaN);
+                windData.push(typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : NaN);
+                solarData.push(typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : NaN);
+                nuclearData.push(typeof data.actual_nuclear_mw === 'number' ? data.actual_nuclear_mw : NaN);
+                nuclearForecastData.push(typeof data.predicted_nuclear_mw === 'number' ? data.predicted_nuclear_mw : NaN);
+                hydroData.push(typeof data.actual_hydro_mw === 'number' ? data.actual_hydro_mw : NaN);
+                importData.push(typeof data.actual_import_mw === 'number' ? data.actual_import_mw : NaN);
             });
 
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -119,11 +121,10 @@
                             label: 'Elpris (c/kWh)',
                             data: priceData,
                             borderColor: 'rgba(54, 162, 235, 1)', 
-                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
                             yAxisID: 'y',
                             tension: 0.4,
-                            fill: false,        // Ändrat till false för att undvika fyllnadsdropp mot 0
-                            spanGaps: false,    // Tvingar linjen att brytas vid saknad data
+                            fill: false,        
+                            spanGaps: false,    
                             order: 1
                         },
                         {
@@ -156,7 +157,7 @@
                             order: 4
                         },
                         {
-                            label: 'Kärnkraft (MW)',
+                            label: 'Kärnkraft Realtid (MW)',
                             data: nuclearData,
                             borderColor: 'rgba(153, 102, 255, 1)', 
                             yAxisID: 'y1',
@@ -166,6 +167,17 @@
                             order: 5
                         },
                         {
+                            label: 'Kärnkraft Prognos (MW)',
+                            data: nuclearForecastData,
+                            borderColor: 'rgba(153, 102, 255, 0.5)', 
+                            borderDash: [5, 5],
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            hidden: true, 
+                            spanGaps: false,
+                            order: 6
+                        },
+                        {
                             label: 'Vattenkraft (MW)',
                             data: hydroData,
                             borderColor: 'rgba(54, 162, 235, 1)', 
@@ -173,7 +185,7 @@
                             tension: 0.4,
                             hidden: true, 
                             spanGaps: false,
-                            order: 6
+                            order: 7
                         },
                         {
                             label: 'Nettoimport (MW)',
@@ -184,7 +196,7 @@
                             tension: 0.4,
                             hidden: true, 
                             spanGaps: false,
-                            order: 7
+                            order: 8
                         }
                     ]
                 },
