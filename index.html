@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <h2>Elpris, Vind & Konsumtion (Komplett)</h2>
+    <h2>Elpris, Vind, Konsumtion & Produktion (Komplett)</h2>
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
@@ -25,7 +25,7 @@
         // KLISTRA IN DIN EGEN CONFIG HÄR!
         // ==========================================
         const firebaseConfig = {
-            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+  apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
   authDomain: "el-benchmark.firebaseapp.com",
   projectId: "el-benchmark",
   storageBucket: "el-benchmark.firebasestorage.app",
@@ -72,18 +72,21 @@
             const windData = [];
             const solarData = [];
             const nuclearData = [];
-            const nuclearForecastData = [];
             const hydroData = [];
             const importData = [];
 
             let nowIndex = 0; 
             const currentTime = new Date().getTime();
+            
+            // Variabel för att minnas det senaste riktiga kärnkraftsvärdet
+            let lastKnownNuclear = null;
 
             const q = query(collection(db, "electricity_points"), orderBy("timestamp", "asc"));
             const querySnapshot = await getDocs(q);
 
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
+                let isFuture = false;
                 
                 if (data.timestamp) {
                     const dateObj = data.timestamp.toDate();
@@ -94,20 +97,31 @@
 
                     if (dateObj.getTime() <= currentTime) {
                         nowIndex = labels.length - 1;
+                    } else {
+                        isFuture = true;
                     }
                 } else {
                     labels.push(doc.id);
                 }
 
-                // Genom att tvinga fram NaN (Not a Number) istället för null klipper Chart.js linjerna direkt.
-                priceData.push(typeof data.actual_price === 'number' ? data.actual_price : NaN);
-                consumptionData.push(typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : NaN);
-                windData.push(typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : NaN);
-                solarData.push(typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : NaN);
-                nuclearData.push(typeof data.actual_nuclear_mw === 'number' ? data.actual_nuclear_mw : NaN);
-                nuclearForecastData.push(typeof data.predicted_nuclear_mw === 'number' ? data.predicted_nuclear_mw : NaN);
-                hydroData.push(typeof data.actual_hydro_mw === 'number' ? data.actual_hydro_mw : NaN);
-                importData.push(typeof data.actual_import_mw === 'number' ? data.actual_import_mw : NaN);
+                // Pusha null om värdet saknas, för att tvinga fram ett linjebrott i grafen
+                priceData.push(typeof data.actual_price === 'number' ? data.actual_price : null);
+                consumptionData.push(typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : null);
+                windData.push(typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : null);
+                solarData.push(typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : null);
+                hydroData.push(typeof data.actual_hydro_mw === 'number' ? data.actual_hydro_mw : null);
+                importData.push(typeof data.actual_import_mw === 'number' ? data.actual_import_mw : null);
+
+                // Smart extrapolering av Kärnkraft (Baslast)
+                if (typeof data.actual_nuclear_mw === 'number') {
+                    lastKnownNuclear = data.actual_nuclear_mw; // Spara senaste kända värdet
+                    nuclearData.push(data.actual_nuclear_mw);
+                } else if (isFuture && lastKnownNuclear !== null) {
+                    // Om vi är i framtiden och har ett sparat värde, rita det som en rak linje
+                    nuclearData.push(lastKnownNuclear);
+                } else {
+                    nuclearData.push(null);
+                }
             });
 
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -124,7 +138,7 @@
                             yAxisID: 'y',
                             tension: 0.4,
                             fill: false,        
-                            spanGaps: false,    
+                            spanGaps: false, // Tvingar grafen att sluta rita om data saknas (t.ex. morgondagens elpris)
                             order: 1
                         },
                         {
@@ -152,30 +166,18 @@
                             borderColor: 'rgba(255, 206, 86, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, 
                             spanGaps: false,
+                            hidden: true, // Håller vi dold från start så det inte blir för grötigt
                             order: 4
                         },
                         {
-                            label: 'Kärnkraft Realtid (MW)',
+                            label: 'Kärnkraft (MW)',
                             data: nuclearData,
                             borderColor: 'rgba(153, 102, 255, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, 
                             spanGaps: false,
                             order: 5
-                        },
-                        {
-                            label: 'Kärnkraft Prognos (MW)',
-                            data: nuclearForecastData,
-                            borderColor: 'rgba(153, 102, 255, 0.5)', 
-                            borderDash: [5, 5],
-                            yAxisID: 'y1',
-                            tension: 0.4,
-                            hidden: true, 
-                            spanGaps: false,
-                            order: 6
                         },
                         {
                             label: 'Vattenkraft (MW)',
@@ -183,9 +185,8 @@
                             borderColor: 'rgba(54, 162, 235, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, 
                             spanGaps: false,
-                            order: 7
+                            order: 6
                         },
                         {
                             label: 'Nettoimport (MW)',
@@ -194,9 +195,8 @@
                             borderDash: [2, 2],
                             yAxisID: 'y1',
                             tension: 0.4,
-                            hidden: true, 
                             spanGaps: false,
-                            order: 8
+                            order: 7
                         }
                     ]
                 },
