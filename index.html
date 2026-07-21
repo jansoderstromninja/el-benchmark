@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <h2>Elpris, Vind & Konsumtion</h2>
+    <h2>Elpris, Vind & Konsumtion (Komplett)</h2>
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
@@ -21,14 +21,19 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // ==========================================
+        // KLISTRA IN DIN EGEN CONFIG HÄR!
+        // ==========================================
         const firebaseConfig = {
-            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
-            authDomain: "el-benchmark.firebaseapp.com",
-            projectId: "el-benchmark",
-            storageBucket: "el-benchmark.firebasestorage.app",
-            messagingSenderId: "775311101952",
-            appId: "1:775311101952:web:904f9fad422692df6e88e5"
+           const firebaseConfig = {
+  apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+  authDomain: "el-benchmark.firebaseapp.com",
+  projectId: "el-benchmark",
+  storageBucket: "el-benchmark.firebasestorage.app",
+  messagingSenderId: "775311101952",
+  appId: "1:775311101952:web:904f9fad422692df6e88e5"
         };
+        // ==========================================
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
@@ -64,8 +69,12 @@
         async function renderChart() {
             const labels = [];
             const priceData = [];
-            const windData = [];
             const consumptionData = [];
+            const windData = [];
+            const solarData = [];
+            const nuclearData = [];
+            const hydroData = [];
+            const importData = [];
 
             let nowIndex = 0; 
             const currentTime = new Date().getTime();
@@ -91,8 +100,14 @@
                 }
 
                 priceData.push(data.actual_price !== undefined ? data.actual_price : null);
-                windData.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
                 consumptionData.push(data.predicted_consumption_mw !== undefined ? data.predicted_consumption_mw : null);
+                windData.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
+                
+                // Nya variablerna
+                solarData.push(data.predicted_solar_mw !== undefined ? data.predicted_solar_mw : null);
+                nuclearData.push(data.actual_nuclear_mw !== undefined ? data.actual_nuclear_mw : null);
+                hydroData.push(data.actual_hydro_mw !== undefined ? data.actual_hydro_mw : null);
+                importData.push(data.actual_import_mw !== undefined ? data.actual_import_mw : null);
             });
 
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -109,15 +124,8 @@
                             backgroundColor: 'rgba(54, 162, 235, 0.1)',
                             yAxisID: 'y',
                             tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Vindprognos (MW)',
-                            data: windData,
-                            borderColor: 'rgba(75, 192, 192, 1)', 
-                            borderDash: [5, 5],
-                            yAxisID: 'y1',
-                            tension: 0.4
+                            fill: true,
+                            order: 1
                         },
                         {
                             label: 'Konsumtionsprognos (MW)',
@@ -125,7 +133,53 @@
                             borderColor: 'rgba(255, 99, 132, 1)', 
                             borderDash: [5, 5],
                             yAxisID: 'y1', 
-                            tension: 0.4
+                            tension: 0.4,
+                            order: 2
+                        },
+                        {
+                            label: 'Vindprognos (MW)',
+                            data: windData,
+                            borderColor: 'rgba(75, 192, 192, 1)', 
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            order: 3
+                        },
+                        {
+                            label: 'Solprognos (MW)',
+                            data: solarData,
+                            borderColor: 'rgba(255, 206, 86, 1)', // Gul
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            hidden: true, // Dold som standard
+                            order: 4
+                        },
+                        {
+                            label: 'Kärnkraft (MW)',
+                            data: nuclearData,
+                            borderColor: 'rgba(153, 102, 255, 1)', // Lila
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            hidden: true, // Dold som standard
+                            order: 5
+                        },
+                        {
+                            label: 'Vattenkraft (MW)',
+                            data: hydroData,
+                            borderColor: 'rgba(54, 162, 235, 1)', // Blå
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            hidden: true, // Dold som standard
+                            order: 6
+                        },
+                        {
+                            label: 'Nettoimport (MW)',
+                            data: importData,
+                            borderColor: 'rgba(201, 203, 207, 1)', // Grå
+                            borderDash: [2, 2],
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            hidden: true, // Dold som standard
+                            order: 7
                         }
                     ]
                 },
@@ -133,6 +187,12 @@
                     plugins: {
                         nowLinePlugin: {
                             index: nowIndex
+                        },
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                            }
                         }
                     },
                     responsive: true,
@@ -157,7 +217,7 @@
                             position: 'right',
                             title: {
                                 display: true,
-                                text: 'Vind / Konsumtion (MW)'
+                                text: 'MW (Produktion & Konsumtion)'
                             },
                             grid: {
                                 drawOnChartArea: false 
