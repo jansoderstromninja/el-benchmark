@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <h2>Elpris, Vind, Konsumtion & Produktion (Komplett)</h2>
+    <h2>Elpris, Vind, Konsumtion & Total Tillgång (Komplett)</h2>
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
@@ -25,6 +25,7 @@
         // KLISTRA IN DIN EGEN CONFIG HÄR!
         // ==========================================
         const firebaseConfig = {
+            const firebaseConfig = {
   apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
   authDomain: "el-benchmark.firebaseapp.com",
   projectId: "el-benchmark",
@@ -74,11 +75,12 @@
             const nuclearData = [];
             const hydroData = [];
             const importData = [];
+            const districtHeatingData = [];
+            const industrialData = [];
+            const totalSuppliedData = [];
 
             let nowIndex = 0; 
             const currentTime = new Date().getTime();
-            
-            // Variabel för att minnas det senaste riktiga kärnkraftsvärdet
             let lastKnownNuclear = null;
 
             const q = query(collection(db, "electricity_points"), orderBy("timestamp", "asc"));
@@ -104,24 +106,37 @@
                     labels.push(doc.id);
                 }
 
-                // Pusha null om värdet saknas, för att tvinga fram ett linjebrott i grafen
                 priceData.push(typeof data.actual_price === 'number' ? data.actual_price : null);
                 consumptionData.push(typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : null);
                 windData.push(typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : null);
                 solarData.push(typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : null);
                 hydroData.push(typeof data.actual_hydro_mw === 'number' ? data.actual_hydro_mw : null);
                 importData.push(typeof data.actual_import_mw === 'number' ? data.actual_import_mw : null);
+                districtHeatingData.push(typeof data.actual_district_heating_mw === 'number' ? data.actual_district_heating_mw : null);
+                industrialData.push(typeof data.actual_industrial_mw === 'number' ? data.actual_industrial_mw : null);
 
                 // Smart extrapolering av Kärnkraft (Baslast)
+                let currentNuclear = null;
                 if (typeof data.actual_nuclear_mw === 'number') {
-                    lastKnownNuclear = data.actual_nuclear_mw; // Spara senaste kända värdet
-                    nuclearData.push(data.actual_nuclear_mw);
+                    lastKnownNuclear = data.actual_nuclear_mw;
+                    currentNuclear = data.actual_nuclear_mw;
                 } else if (isFuture && lastKnownNuclear !== null) {
-                    // Om vi är i framtiden och har ett sparat värde, rita det som en rak linje
-                    nuclearData.push(lastKnownNuclear);
-                } else {
-                    nuclearData.push(null);
+                    currentNuclear = lastKnownNuclear;
                 }
+                nuclearData.push(currentNuclear);
+
+                // Summera Total Tillgång (Produktion + Import) om vi har data för punkten
+                const nuc = currentNuclear || 0;
+                const hyd = data.actual_hydro_mw || 0;
+                const win = data.predicted_wind_mw || data.actual_wind_mw || 0; // Fallback om prognos saknas
+                const sol = data.predicted_solar_mw || 0;
+                const imp = data.actual_import_mw || 0;
+                const dh = data.actual_district_heating_mw || 0;
+                const ind = data.actual_industrial_mw || 0;
+
+                const totalSum = nuc + hyd + win + sol + imp + dh + ind;
+                // Om i princip allt är 0 (t.ex. tomt dokument), sätt null
+                totalSuppliedData.push(totalSum > 100 ? totalSum : null);
             });
 
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -138,7 +153,7 @@
                             yAxisID: 'y',
                             tension: 0.4,
                             fill: false,        
-                            spanGaps: false, // Tvingar grafen att sluta rita om data saknas (t.ex. morgondagens elpris)
+                            spanGaps: false,
                             order: 1
                         },
                         {
@@ -152,22 +167,23 @@
                             order: 2
                         },
                         {
-                            label: 'Vindprognos (MW)',
-                            data: windData,
-                            borderColor: 'rgba(75, 192, 192, 1)', 
+                            label: 'Total Tillgång (MW)',
+                            data: totalSuppliedData,
+                            borderColor: 'rgba(46, 204, 113, 1)', // Snygg mörkgrön färg för totalen
+                            borderWidth: 3,
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
                             order: 3
                         },
                         {
-                            label: 'Solprognos (MW)',
-                            data: solarData,
-                            borderColor: 'rgba(255, 206, 86, 1)', 
+                            label: 'Vindprognos (MW)',
+                            data: windData,
+                            borderColor: 'rgba(75, 192, 192, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
-                            hidden: true, // Håller vi dold från start så det inte blir för grötigt
+                            hidden: true,
                             order: 4
                         },
                         {
@@ -177,6 +193,7 @@
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
+                            hidden: true,
                             order: 5
                         },
                         {
@@ -186,17 +203,38 @@
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
+                            hidden: true,
                             order: 6
                         },
                         {
                             label: 'Nettoimport (MW)',
                             data: importData,
                             borderColor: 'rgba(201, 203, 207, 1)', 
-                            borderDash: [2, 2],
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
+                            hidden: true,
                             order: 7
+                        },
+                        {
+                            label: 'Fjärrvärme (MW)',
+                            data: districtHeatingData,
+                            borderColor: 'rgba(230, 126, 34, 1)', 
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            spanGaps: false,
+                            hidden: true,
+                            order: 8
+                        },
+                        {
+                            label: 'Industriell samprod. (MW)',
+                            data: industrialData,
+                            borderColor: 'rgba(241, 196, 15, 1)', 
+                            yAxisID: 'y1',
+                            tension: 0.4,
+                            spanGaps: false,
+                            hidden: true,
+                            order: 9
                         }
                     ]
                 },
