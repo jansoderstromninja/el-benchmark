@@ -6,105 +6,101 @@
     <title>El-benchmark</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { margin: 0; padding: 10px; background-color: #f9f9f9; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 900px; height: 80vh; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        body { font-family: sans-serif; padding: 20px; }
+        .chart-container { position: relative; height: 80vh; width: 100%; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <canvas id="elChart"></canvas>
+
+    <h2>Elpris, Vind & Konsumtion</h2>
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // VÄNLIGEN KLISTRA IN DIN FIREBASE CONFIG HÄR:
         const firebaseConfig = {
-            apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
-            authDomain: "el-benchmark.firebaseapp.com",
-            projectId: "el-benchmark",
-            storageBucket: "el-benchmark.firebasestorage.app",
-            messagingSenderId: "775311101952",
-            appId: "1:775311101952:web:904f9fad422692df6e88e5"
+            // apiKey: "...",
+            // authDomain: "...",
+            // projectId: "...",
+            // osv...
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        const currentTimePlugin = {
-            id: 'currentTimeLine',
-            afterDraw: (chart) => {
-                const { ctx, scales: { x, y } } = chart;
-                const now = new Date();
-                const currentHourLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:00`;
-                const index = chart.data.labels.findIndex(label => label === currentHourLabel);
-
-                if (index !== -1) {
-                    const xPos = x.getPixelForValue(index);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(xPos, y.top);
-                    ctx.lineTo(xPos, y.bottom);
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'rgba(46, 204, 113, 0.8)';
-                    ctx.setLineDash([5, 5]);
-                    ctx.stroke();
-                    ctx.fillStyle = 'rgba(46, 204, 113, 1)';
-                    ctx.textAlign = 'center';
-                    ctx.font = 'bold 12px sans-serif';
-                    ctx.fillText('Nu', xPos, y.top - 5);
-                    ctx.restore();
-                }
-            }
-        };
-
         async function renderChart() {
-            const q = query(collection(db, "electricity_points"), orderBy("__name__"));
+            const labels = [];
+            const priceData = [];
+            const windData = [];
+            const consumptionData = [];
+
+            const q = query(collection(db, "electricity_points"), orderBy("timestamp", "asc"));
             const querySnapshot = await getDocs(q);
-            
-            const labels = [], actualPrices = [], windPredictions = [];
+
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
-                const parts = doc.id.split("_");
-                labels.push(parts[0] + " " + parts[1]);
                 
-                actualPrices.push(data.actual_price !== undefined ? data.actual_price : null);
-                // Ändrat från vatkain till vår nya wind_mw data
-                windPredictions.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
+                // Formaterar X-axeln snyggare, t.ex. "21 jul 15:00"
+                if (data.timestamp) {
+                    const dateObj = data.timestamp.toDate();
+                    const formattedDate = dateObj.toLocaleString('sv-FI', { 
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                    });
+                    labels.push(formattedDate);
+                } else {
+                    labels.push(doc.id);
+                }
+
+                priceData.push(data.actual_price !== undefined ? data.actual_price : null);
+                windData.push(data.predicted_wind_mw !== undefined ? data.predicted_wind_mw : null);
+                consumptionData.push(data.predicted_consumption_mw !== undefined ? data.predicted_consumption_mw : null);
             });
 
-            new Chart(document.getElementById('elChart').getContext('2d'), {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [
-                        { 
-                            label: 'Elpris (c/kWh)', 
-                            data: actualPrices, 
-                            borderColor: '#3498db', 
-                            tension: 0.2, 
-                            spanGaps: true,
-                            yAxisID: 'y' // Kopplar priset till vänstra axeln
+                        {
+                            label: 'Elpris (c/kWh)',
+                            data: priceData,
+                            borderColor: 'rgba(54, 162, 235, 1)', 
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.4,
+                            fill: true
                         },
-                        { 
-                            label: 'Vindprognos (MW)', 
-                            data: windPredictions, 
-                            borderColor: '#2ecc71', // Snygg grön färg
-                            borderDash: [5, 5], 
-                            tension: 0.2, 
-                            spanGaps: true,
-                            yAxisID: 'y1' // Kopplar vinden till högra axeln
+                        {
+                            label: 'Vindprognos (MW)',
+                            data: windData,
+                            borderColor: 'rgba(75, 192, 192, 1)', 
+                            borderDash: [5, 5],
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Konsumtionsprognos (MW)',
+                            data: consumptionData,
+                            borderColor: 'rgba(255, 99, 132, 1)', 
+                            borderDash: [5, 5],
+                            yAxisID: 'y1', 
+                            tension: 0.4
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: false },
-                    scales: { 
-                        x: { 
-                            ticks: { maxRotation: 45, maxTicksLimit: 6 } 
-                        },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
                         y: {
                             type: 'linear',
                             display: true,
@@ -120,31 +116,17 @@
                             position: 'right',
                             title: {
                                 display: true,
-                                text: 'Vindkraft (MW)'
+                                text: 'Vind / Konsumtion (MW)'
                             },
                             grid: {
-                                drawOnChartArea: false // Hindrar rutnätet från att bli rörigt
-                            }
-                        }
-                    },
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let value = context.parsed.y ?? 'N/A';
-                                    if (context.datasetIndex === 0) {
-                                        return context.dataset.label + ': ' + value + ' cent';
-                                    } else {
-                                        return context.dataset.label + ': ' + value + ' MW';
-                                    }
-                                }
+                                drawOnChartArea: false 
                             }
                         }
                     }
-                },
-                plugins: [currentTimePlugin]
+                }
             });
         }
+
         renderChart();
     </script>
 </body>
