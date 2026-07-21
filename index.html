@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>El-benchmark: Pris, Vind, Sol & Konsumtion</title>
+    <title>El-benchmark: Prisprognos</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; }
@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <h2>Elpris, Vind, Sol & Konsumtionsprognos</h2>
+    <h2>Elpris, Vind, Sol & Prisprognos</h2>
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
@@ -25,7 +25,7 @@
         // KLISTRA IN DIN EGEN CONFIG HÄR!
         // ==========================================
         const firebaseConfig = {
- apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+          apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
   authDomain: "el-benchmark.firebaseapp.com",
   projectId: "el-benchmark",
   storageBucket: "el-benchmark.firebasestorage.app",
@@ -68,6 +68,7 @@
         async function renderChart() {
             const labels = [];
             const priceData = [];
+            const predictedPriceData = [];
             const consumptionData = [];
             const windData = [];
             const solarData = [];
@@ -78,9 +79,21 @@
             const q = query(collection(db, "electricity_points"), orderBy("timestamp", "asc"));
             const querySnapshot = await getDocs(q);
 
+            // Första loopen: Samla in rådata
+            const rawDocs = [];
             querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                
+                rawDocs.push(doc.data());
+            });
+
+            // Beräkna medelvärden för att kunna skala vår enkla modell
+            let totalCons = 0, totalWind = 0, count = 0;
+            rawDocs.forEach(d => {
+                if (d.predicted_consumption_mw) { totalCons += d.predicted_consumption_mw; count++; }
+                if (d.predicted_wind_mw) totalWind += d.predicted_wind_mw;
+            });
+            const avgCons = count > 0 ? totalCons / count : 7500;
+
+            rawDocs.forEach((data) => {
                 if (data.timestamp) {
                     const dateObj = data.timestamp.toDate();
                     const formattedDate = dateObj.toLocaleString('sv-FI', { 
@@ -95,10 +108,24 @@
                     labels.push(doc.id);
                 }
 
-                priceData.push(typeof data.actual_price === 'number' ? data.actual_price : null);
-                consumptionData.push(typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : null);
-                windData.push(typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : null);
-                solarData.push(typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : null);
+                const actualPrice = typeof data.actual_price === 'number' ? data.actual_price : null;
+                const cons = typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : avgCons;
+                const wind = typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : 0;
+                const solar = typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : 0;
+
+                priceData.push(actualPrice);
+                consumptionData.push(cons);
+                windData.push(wind);
+                solarData.push(solar);
+
+                // Enkel modell för prisprognos: 
+                // Baspris (t.ex. 3 c/kWh) + påverkan av konsumtion - påverkan av vind & sol
+                // (Det här är en heuristisk basmodell som vi kan finjustera när vi ser hur kurvan betett sig)
+                let modelPrice = 3.0 + ((cons - avgCons) / 1500) - ((wind + solar * 1.5) / 2500);
+                // Håll priset rimligt (inte negativt om vi inte vill, eller tillåt om marknaden är så liten)
+                modelPrice = Math.max(0.5, modelPrice);
+                
+                predictedPriceData.push(modelPrice);
             });
 
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -109,7 +136,7 @@
                     labels: labels,
                     datasets: [
                         {
-                            label: 'Elpris (c/kWh)',
+                            label: 'Faktiskt Elpris (c/kWh)',
                             data: priceData,
                             borderColor: 'rgba(54, 162, 235, 1)', 
                             yAxisID: 'y',
@@ -119,6 +146,17 @@
                             order: 1
                         },
                         {
+                            label: 'Prisprognos (Modell)',
+                            data: predictedPriceData,
+                            borderColor: 'rgba(155, 89, 182, 1)', // Lila streckad linje för modellen
+                            borderDash: [3, 3],
+                            borderWidth: 2,
+                            yAxisID: 'y',
+                            tension: 0.4,
+                            spanGaps: false,
+                            order: 2
+                        },
+                        {
                             label: 'Konsumtionsprognos (MW)',
                             data: consumptionData,
                             borderColor: 'rgba(255, 99, 132, 1)', 
@@ -126,7 +164,8 @@
                             yAxisID: 'y1', 
                             tension: 0.4,
                             spanGaps: false,
-                            order: 2
+                            hidden: true,
+                            order: 3
                         },
                         {
                             label: 'Vindprognos (MW)',
@@ -135,16 +174,18 @@
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
-                            order: 3
+                            hidden: true,
+                            order: 4
                         },
                         {
                             label: 'Solprognos (MW)',
                             data: solarData,
-                            borderColor: 'rgba(241, 196, 15, 1)', // Gul/Orange ton för sol
+                            borderColor: 'rgba(241, 196, 15, 1)', 
                             yAxisID: 'y1',
                             tension: 0.4,
                             spanGaps: false,
-                            order: 4
+                            hidden: true,
+                            order: 5
                         }
                     ]
                 },
