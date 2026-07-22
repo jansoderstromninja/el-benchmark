@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>El-benchmark: Prisprognos</title>
+    <title>El-benchmark: Prisprognos (Icke-linjär)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; }
@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <h2>Elpris, Vind, Sol & Prisprognos</h2>
+    <h2>Elpris, Vind, Sol & Prisprognos (Avancerad Modell)</h2>
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
@@ -25,7 +25,7 @@
         // KLISTRA IN DIN EGEN CONFIG HÄR!
         // ==========================================
         const firebaseConfig = {
-          apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+             apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
   authDomain: "el-benchmark.firebaseapp.com",
   projectId: "el-benchmark",
   storageBucket: "el-benchmark.firebasestorage.app",
@@ -79,19 +79,10 @@
             const q = query(collection(db, "electricity_points"), orderBy("timestamp", "asc"));
             const querySnapshot = await getDocs(q);
 
-            // Första loopen: Samla in rådata
             const rawDocs = [];
             querySnapshot.forEach((doc) => {
                 rawDocs.push(doc.data());
             });
-
-            // Beräkna medelvärden för att kunna skala vår enkla modell
-            let totalCons = 0, totalWind = 0, count = 0;
-            rawDocs.forEach(d => {
-                if (d.predicted_consumption_mw) { totalCons += d.predicted_consumption_mw; count++; }
-                if (d.predicted_wind_mw) totalWind += d.predicted_wind_mw;
-            });
-            const avgCons = count > 0 ? totalCons / count : 7500;
 
             rawDocs.forEach((data) => {
                 if (data.timestamp) {
@@ -109,7 +100,7 @@
                 }
 
                 const actualPrice = typeof data.actual_price === 'number' ? data.actual_price : null;
-                const cons = typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : avgCons;
+                const cons = typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : 7500;
                 const wind = typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : 0;
                 const solar = typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : 0;
 
@@ -118,13 +109,25 @@
                 windData.push(wind);
                 solarData.push(solar);
 
-                // Enkel modell för prisprognos: 
-                // Baspris (t.ex. 3 c/kWh) + påverkan av konsumtion - påverkan av vind & sol
-                // (Det här är en heuristisk basmodell som vi kan finjustera när vi ser hur kurvan betett sig)
-                let modelPrice = 3.0 + ((cons - avgCons) / 1500) - ((wind + solar * 1.5) / 2500);
-                // Håll priset rimligt (inte negativt om vi inte vill, eller tillåt om marknaden är så liten)
-                modelPrice = Math.max(0.5, modelPrice);
-                
+                // =========================================================
+                // ICKE-LINJÄR MODELL MED HÖG VIND-/SOLKÄNSLIGHET
+                // =========================================================
+                // 1. Beräkna kvarvarande netto-efterfrågan efter vind och sol
+                const netDemand = cons - (wind * 1.15 + solar * 1.35);
+
+                let modelPrice;
+                if (netDemand > 5000) {
+                    // Hög efterfrågan / låg förnybar produktion -> Priset stiger
+                    modelPrice = 2.5 + Math.pow((netDemand - 5000) / 1200, 1.3);
+                } else {
+                    // Hög vind/sol-produktion -> Priset faller exponentiellt mot noll!
+                    modelPrice = 2.5 * Math.pow(Math.max(0.05, netDemand / 5000), 1.8);
+                }
+
+                // Tillåt priset att dyka ner mot nära noll (0.1 c/kWh)
+                modelPrice = Math.max(0.1, modelPrice);
+                // =========================================================
+
                 predictedPriceData.push(modelPrice);
             });
 
@@ -146,9 +149,9 @@
                             order: 1
                         },
                         {
-                            label: 'Prisprognos (Modell)',
+                            label: 'Prisprognos (Icke-linjär modell)',
                             data: predictedPriceData,
-                            borderColor: 'rgba(155, 89, 182, 1)', // Lila streckad linje för modellen
+                            borderColor: 'rgba(155, 89, 182, 1)', 
                             borderDash: [3, 3],
                             borderWidth: 2,
                             yAxisID: 'y',
