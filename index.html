@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>El-benchmark: Prisprognos (Icke-linjär)</title>
+    <title>El-benchmark: Prisprognos</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: sans-serif; padding: 20px; }
@@ -12,7 +12,7 @@
 </head>
 <body>
 
-    <h2>Elpris, Vind, Sol & Prisprognos (Avancerad Modell)</h2>
+    <h2>Elpris, Vind, Sol & Prisprognos</h2>
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
@@ -25,7 +25,7 @@
         // KLISTRA IN DIN EGEN CONFIG HÄR!
         // ==========================================
         const firebaseConfig = {
-             apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
+              apiKey: "AIzaSyBmk39kYb5XR448B2keXRwLIfJIFyXmAoA",
   authDomain: "el-benchmark.firebaseapp.com",
   projectId: "el-benchmark",
   storageBucket: "el-benchmark.firebasestorage.app",
@@ -100,7 +100,7 @@
                 }
 
                 const actualPrice = typeof data.actual_price === 'number' ? data.actual_price : null;
-                const cons = typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : 7500;
+                const cons = typeof data.predicted_consumption_mw === 'number' ? data.predicted_consumption_mw : null;
                 const wind = typeof data.predicted_wind_mw === 'number' ? data.predicted_wind_mw : 0;
                 const solar = typeof data.predicted_solar_mw === 'number' ? data.predicted_solar_mw : 0;
 
@@ -110,25 +110,20 @@
                 solarData.push(solar);
 
                 // =========================================================
-                // ICKE-LINJÄR MODELL MED HÖG VIND-/SOLKÄNSLIGHET
+                // LINJÄR BALANSERAD MODELL MED STÖD FÖR MINUSPRISER
                 // =========================================================
-                // 1. Beräkna kvarvarande netto-efterfrågan efter vind och sol
-                const netDemand = cons - (wind * 1.15 + solar * 1.35);
-
-                let modelPrice;
-                if (netDemand > 5000) {
-                    // Hög efterfrågan / låg förnybar produktion -> Priset stiger
-                    modelPrice = 2.5 + Math.pow((netDemand - 5000) / 1200, 1.3);
+                if (cons !== null) {
+                    // Baspris ~2.7 c/kWh
+                    // Högre konsumtion drar upp priset svagt.
+                    // Stark vind och sol drar ner priset påtagligt.
+                    let modelPrice = 2.7 + ((cons - 7500) / 2000) - ((wind * 1.2 + solar * 1.3) / 2000);
+                    
+                    // Tillåt minuspriser ner till -3.0 c/kWh vid kraftigt överskott
+                    modelPrice = Math.max(-3.0, modelPrice);
+                    predictedPriceData.push(modelPrice);
                 } else {
-                    // Hög vind/sol-produktion -> Priset faller exponentiellt mot noll!
-                    modelPrice = 2.5 * Math.pow(Math.max(0.05, netDemand / 5000), 1.8);
+                    predictedPriceData.push(null); // Förhindrar platt startlinje
                 }
-
-                // Tillåt priset att dyka ner mot nära noll (0.1 c/kWh)
-                modelPrice = Math.max(0.1, modelPrice);
-                // =========================================================
-
-                predictedPriceData.push(modelPrice);
             });
 
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -149,7 +144,7 @@
                             order: 1
                         },
                         {
-                            label: 'Prisprognos (Icke-linjär modell)',
+                            label: 'Prisprognos (Modell)',
                             data: predictedPriceData,
                             borderColor: 'rgba(155, 89, 182, 1)', 
                             borderDash: [3, 3],
